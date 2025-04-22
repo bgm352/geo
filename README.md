@@ -1,6 +1,6 @@
 # Healthcare Search Terms Dashboard
 
-A React-based dashboard that visualizes the top healthcare search terms by geographical region. This interactive dashboard provides insights into healthcare trends across different parts of the world.
+A Python-based dashboard that visualizes the top healthcare search terms by geographical region. This interactive dashboard provides insights into healthcare trends across different parts of the world.
 
 ## Features
 
@@ -10,23 +10,29 @@ A React-based dashboard that visualizes the top healthcare search terms by geogr
 - Line chart displaying search trends over time
 - Responsive design that works on desktop and mobile devices
 
-## Screenshots
-
-![Dashboard Preview](/screenshot.png)
-
 ## Technology Stack
 
-- React.js
-- Recharts for data visualization
+- Python 3.10+
+- Dash & Plotly for interactive visualization
+- Pandas for data manipulation
 - Tailwind CSS for styling
-- Lucide React for icons
+
+## Directory Structure
+
+```
+healthcare-search-dashboard/
+├── app.py                # Main application file
+├── requirements.txt      # Python dependencies
+├── Dockerfile            # For containerized deployment
+└── README.md            # Documentation
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v14 or later)
-- npm or yarn
+- Python 3.10 or later
+- pip package manager
 
 ### Installation
 
@@ -36,41 +42,73 @@ git clone https://github.com/your-username/healthcare-search-dashboard.git
 cd healthcare-search-dashboard
 ```
 
-2. Install dependencies:
+2. Create a virtual environment (optional but recommended):
 ```bash
-npm install
-# or
-yarn install
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Start the development server:
+3. Install dependencies:
 ```bash
-npm start
-# or
-yarn start
+pip install -r requirements.txt
 ```
 
-4. Open your browser and navigate to http://localhost:3000
+4. Run the application:
+```bash
+python app.py
+```
+
+5. Open your browser and navigate to http://localhost:8050
+
+## Docker Deployment
+
+To run the dashboard using Docker:
+
+1. Build the Docker image:
+```bash
+docker build -t healthcare-dashboard .
+```
+
+2. Run the container:
+```bash
+docker run -p 8050:8050 healthcare-dashboard
+```
+
+3. Access the dashboard at http://localhost:8050
 
 ## Data Sources
 
 The current implementation uses mock data for demonstration purposes. In a production environment, you would connect to a real API endpoint to fetch healthcare search data.
 
 To connect to a real data source:
-1. Update the API endpoints in the useEffect hooks
-2. Adjust the data processing logic if needed
+1. Update the data loading logic in app.py
+2. Adjust the data processing as needed
 
-## Deployment
+## Deployment on GitHub
 
-To build the app for production:
-
+1. Initialize a Git repository in your project directory:
 ```bash
-npm run build
-# or
-yarn build
+git init
 ```
 
-This will create an optimized build in the `build` folder that can be deployed to any static hosting service.
+2. Add all files to the repository:
+```bash
+git add .
+```
+
+3. Commit the changes:
+```bash
+git commit -m "Initial commit: Healthcare Search Dashboard"
+```
+
+4. Create a new repository on GitHub through the web interface
+
+5. Link your local repository to GitHub:
+```bash
+git remote add origin https://github.com/your-username/healthcare-search-dashboard.git
+git branch -M main
+git push -u origin main
+```
 
 ## Future Enhancements
 
