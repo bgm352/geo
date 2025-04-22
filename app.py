@@ -189,7 +189,7 @@ function App() {
 
       <footer className="bg-gray-800 text-white p-4 mt-8">
         <div className="container mx-auto text-center">
-          <p>© 2025 Healthcare Search Trends Dashboard. Data is for demonstration purposes only.</p>
+          <p>2025 Healthcare Search Trends Dashboard. Data is for demonstration purposes only.</p>
         </div>
       </footer>
     </div>
