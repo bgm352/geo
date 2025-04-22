@@ -1,15 +1,11 @@
+#!/usr/bin/env python3
 # /mount/src/geo/app.py
-import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output
-import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
-from datetime import datetime
 
-# Initialize the Dash app
-app = dash.Dash(__name__, external_stylesheets=['https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css'])
-server = app.server
+import json
+import os
+import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 
 # Mock data - replace with real API calls in production
 regions = ['North America', 'Europe', 'Asia', 'South America', 'Africa', 'Australia']
@@ -60,166 +56,349 @@ search_terms_data = {
 }
 
 # Time series data for trends
-trend_data = pd.DataFrame([
+trend_data = [
     {"month": "Jan", "COVID vaccine": 8000, "Diabetes management": 6000, "Mental health": 5000},
     {"month": "Feb", "COVID vaccine": 9200, "Diabetes management": 6100, "Mental health": 5200},
     {"month": "Mar", "COVID vaccine": 9800, "Diabetes management": 6500, "Mental health": 5800},
     {"month": "Apr", "COVID vaccine": 10500, "Diabetes management": 7100, "Mental health": 6300},
     {"month": "May", "COVID vaccine": 11200, "Diabetes management": 7800, "Mental health": 6800},
     {"month": "Jun", "COVID vaccine": 12500, "Diabetes management": 8700, "Mental health": 7800}
-])
+]
 
-# Colors
-colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A259FF']
-
-# App layout
-app.layout = html.Div(
-    className="bg-gray-100 min-h-screen",
-    children=[
-        # Header
-        html.Header(
-            className="bg-blue-600 text-white shadow-md p-4",
-            children=[
-                html.Div(
-                    className="container mx-auto flex items-center justify-between",
-                    children=[
-                        html.Div(
-                            className="flex items-center",
-                            children=[
-                                html.H1("Healthcare Search Trends Dashboard", className="text-2xl font-bold")
-                            ]
-                        ),
-                        html.Div(
-                            children=[
-                                html.P(f"Last updated: {datetime.now().strftime('%B %d, %Y')}", className="text-sm opacity-80")
-                            ]
-                        )
-                    ]
-                )
-            ]
-        ),
+# Static HTML with embedded data
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Search Terms Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-blue-600 text-white shadow-md p-4">
+        <div class="container mx-auto flex items-center justify-between">
+            <div class="flex items-center">
+                <h1 class="text-2xl font-bold">Healthcare Search Terms Dashboard</h1>
+            </div>
+            <div>
+                <p class="text-sm opacity-80">Last updated: {current_date}</p>
+            </div>
+        </div>
+    </header>
+    
+    <main class="container mx-auto p-4">
+        <!-- Region selector -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <h2 class="text-lg font-semibold mb-3">Select Region</h2>
+            <div class="flex flex-wrap gap-2" id="region-buttons">
+                {region_buttons}
+            </div>
+        </div>
         
-        # Main content
-        html.Main(
-            className="container mx-auto p-4",
-            children=[
-                # Region selector
-                html.Div(
-                    className="bg-white rounded-lg shadow-md p-4 mb-6",
-                    children=[
-                        html.H2("Select Region", className="text-lg font-semibold mb-3"),
-                        dcc.RadioItems(
-                            id='region-selector',
-                            options=[{'label': region, 'value': region} for region in regions],
-                            value='North America',
-                            className="flex flex-wrap gap-2",
-                            labelClassName="px-4 py-2 rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer",
-                            inputClassName="hidden"
-                        )
-                    ]
-                ),
-                
-                # Dashboard grid
-                html.Div(
-                    className="grid grid-cols-1 lg:grid-cols-2 gap-6",
-                    children=[
-                        # Top search terms bar chart
-                        html.Div(
-                            className="bg-white rounded-lg shadow-md p-4",
-                            children=[
-                                html.H2(id="bar-chart-title", className="text-lg font-semibold mb-4"),
-                                dcc.Graph(id='bar-chart')
-                            ]
-                        ),
-                        
-                        # Distribution pie chart
-                        html.Div(
-                            className="bg-white rounded-lg shadow-md p-4",
-                            children=[
-                                html.H2(id="pie-chart-title", className="text-lg font-semibold mb-4"),
-                                dcc.Graph(id='pie-chart')
-                            ]
-                        ),
-                        
-                        # Search trends over time
-                        html.Div(
-                            className="bg-white rounded-lg shadow-md p-4 lg:col-span-2",
-                            children=[
-                                html.H2("Search Trends Over Time (Top 3 Terms)", className="text-lg font-semibold mb-4"),
-                                dcc.Graph(id='line-chart')
-                            ]
-                        )
-                    ]
-                )
-            ]
-        ),
+        <!-- Dashboard grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Top search terms bar chart -->
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <h2 id="bar-chart-title" class="text-lg font-semibold mb-4">Top Healthcare Search Terms in <span id="region-name">North America</span></h2>
+                <div class="chart-container">
+                    <canvas id="bar-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Distribution pie chart -->
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <h2 id="pie-chart-title" class="text-lg font-semibold mb-4">Search Distribution in <span id="region-name2">North America</span></h2>
+                <div class="chart-container">
+                    <canvas id="pie-chart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Search trends over time -->
+            <div class="bg-white rounded-lg shadow-md p-4 lg:col-span-2">
+                <h2 class="text-lg font-semibold mb-4">Search Trends Over Time (Top 3 Terms)</h2>
+                <div class="chart-container">
+                    <canvas id="line-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer class="bg-gray-800 text-white p-4 mt-8">
+        <div class="container mx-auto text-center">
+            <p>© 2025 Healthcare Search Trends Dashboard. Data is for demonstration purposes only.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Store all data in JavaScript
+        const searchTermsData = {data_json};
+        const trendData = {trend_json};
+        const regions = {regions_json};
         
-        # Footer
-        html.Footer(
-            className="bg-gray-800 text-white p-4 mt-8",
-            children=[
-                html.Div(
-                    className="container mx-auto text-center",
-                    children=[
-                        html.P("© 2025 Healthcare Search Trends Dashboard. Data is for demonstration purposes only.")
+        // Colors for charts
+        const colors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A259FF'];
+        
+        // Get chart contexts
+        const barCtx = document.getElementById('bar-chart').getContext('2d');
+        const pieCtx = document.getElementById('pie-chart').getContext('2d');
+        const lineCtx = document.getElementById('line-chart').getContext('2d');
+        
+        // Initialize charts
+        let barChart, pieChart, lineChart;
+        
+        // Set up region buttons
+        const regionButtons = document.getElementById('region-buttons');
+        regions.forEach(region => {{
+            const button = document.createElement('button');
+            button.textContent = region;
+            button.className = 'px-4 py-2 rounded-full cursor-pointer';
+            button.classList.add(region === 'North America' ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300');
+            button.addEventListener('click', () => updateDashboard(region));
+            regionButtons.appendChild(button);
+        }});
+        
+        // Update all charts when a new region is selected
+        function updateDashboard(region) {{
+            // Update active button
+            document.querySelectorAll('#region-buttons button').forEach(btn => {{
+                if (btn.textContent === region) {{
+                    btn.className = 'px-4 py-2 rounded-full bg-blue-600 text-white cursor-pointer';
+                }} else {{
+                    btn.className = 'px-4 py-2 rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer';
+                }}
+            }});
+            
+            // Update region name in titles
+            document.querySelectorAll('#region-name, #region-name2').forEach(el => {{
+                el.textContent = region;
+            }});
+            
+            // Get data for selected region
+            const data = searchTermsData[region];
+            
+            // Update bar chart
+            updateBarChart(data);
+            
+            // Update pie chart
+            updatePieChart(data);
+            
+            // Update line chart (this doesn't change with region in our mock data)
+            if (!lineChart) {{
+                createLineChart();
+            }}
+        }}
+        
+        function updateBarChart(data) {{
+            const labels = data.map(item => item.term);
+            const counts = data.map(item => item.count);
+            
+            // Destroy previous chart if it exists
+            if (barChart) {{
+                barChart.destroy();
+            }}
+            
+            // Create new bar chart
+            barChart = new Chart(barCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: 'Search Count',
+                        data: counts,
+                        backgroundColor: colors,
+                        borderColor: colors.map(color => color + '88'),
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    indexAxis: 'y',
+                    scales: {{
+                        x: {{
+                            beginAtZero: true
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        function updatePieChart(data) {{
+            const labels = data.map(item => item.term);
+            const counts = data.map(item => item.count);
+            
+            // Destroy previous chart if it exists
+            if (pieChart) {{
+                pieChart.destroy();
+            }}
+            
+            // Create new pie chart
+            pieChart = new Chart(pieCtx, {{
+                type: 'pie',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        data: counts,
+                        backgroundColor: colors,
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    plugins: {{
+                        legend: {{
+                            position: 'right'
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        function createLineChart() {{
+            const months = trendData.map(item => item.month);
+            
+            lineChart = new Chart(lineCtx, {{
+                type: 'line',
+                data: {{
+                    labels: months,
+                    datasets: [
+                        {{
+                            label: 'COVID vaccine',
+                            data: trendData.map(item => item['COVID vaccine']),
+                            borderColor: colors[0],
+                            backgroundColor: colors[0] + '22',
+                            fill: false,
+                            tension: 0.1
+                        }},
+                        {{
+                            label: 'Diabetes management',
+                            data: trendData.map(item => item['Diabetes management']),
+                            borderColor: colors[1],
+                            backgroundColor: colors[1] + '22',
+                            fill: false,
+                            tension: 0.1
+                        }},
+                        {{
+                            label: 'Mental health',
+                            data: trendData.map(item => item['Mental health']),
+                            borderColor: colors[2],
+                            backgroundColor: colors[2] + '22',
+                            fill: false,
+                            tension: 0.1
+                        }}
                     ]
-                )
-            ]
-        )
-    ]
-)
+                }},
+                options: {{
+                    scales: {{
+                        y: {{
+                            beginAtZero: true
+                        }}
+                    }}
+                }}
+            }});
+        }}
+        
+        // Initialize with North America data
+        updateDashboard('North America');
+    </script>
+</body>
+</html>
+"""
 
-# Callbacks for interactivity
-@app.callback(
-    [
-        Output('bar-chart-title', 'children'),
-        Output('bar-chart', 'figure'),
-        Output('pie-chart-title', 'children'),
-        Output('pie-chart', 'figure'),
-        Output('line-chart', 'figure')
-    ],
-    [Input('region-selector', 'value')]
-)
-def update_charts(selected_region):
-    # Convert region data to DataFrame
-    df = pd.DataFrame(search_terms_data[selected_region])
-    
-    # Create bar chart
-    bar_fig = px.bar(
-        df, 
-        y='term', 
-        x='count',
-        orientation='h',
-        title=f"Top Healthcare Search Terms in {selected_region}",
-        labels={'count': 'Search Count', 'term': 'Search Term'},
-        color_discrete_sequence=colors
-    )
-    
-    # Create pie chart
-    pie_fig = px.pie(
-        df, 
-        values='count', 
-        names='term',
-        title=f"Search Distribution in {selected_region}",
-        color_discrete_sequence=colors
-    )
-    pie_fig.update_traces(textposition='inside', textinfo='percent+label')
-    
-    # Create line chart
-    line_fig = px.line(
-        trend_data, 
-        x='month', 
-        y=['COVID vaccine', 'Diabetes management', 'Mental health'],
-        title="Search Trends Over Time (Top 3 Terms)",
-        labels={'value': 'Search Count', 'variable': 'Search Term'},
-        color_discrete_sequence=colors
-    )
-    
-    bar_title = f"Top Healthcare Search Terms in {selected_region}"
-    pie_title = f"Search Distribution in {selected_region}"
-    
-    return bar_title, bar_fig, pie_title, pie_fig, line_fig
+# HTTP Server to serve the dashboard
+class DashboardHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        # Parse query parameters
+        parsed_path = urllib.parse.urlparse(self.path)
+        
+        # Default to homepage
+        if parsed_path.path == '/' or parsed_path.path == '/index.html':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            
+            # Generate region buttons HTML
+            region_buttons = ""
+            for region in regions:
+                active_class = "bg-blue-600 text-white" if region == "North America" else "bg-gray-200 hover:bg-gray-300"
+                region_buttons += f'<button class="px-4 py-2 rounded-full {active_class} cursor-pointer">{region}</button>'
+            
+            # Fill template with data
+            html_content = HTML_TEMPLATE.format(
+                current_date=datetime.datetime.now().strftime("%B %d, %Y"),
+                region_buttons=region_buttons,
+                data_json=json.dumps(search_terms_data),
+                trend_json=json.dumps(trend_data),
+                regions_json=json.dumps(regions)
+            )
+            
+            self.wfile.write(html_content.encode())
+        # API endpoint for data
+        elif parsed_path.path == '/api/data':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            # Create response object
+            response = {
+                "regions": regions,
+                "searchTerms": search_terms_data,
+                "trends": trend_data
+            }
+            
+            self.wfile.write(json.dumps(response).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b'404 Not Found')
 
-# Run the app
-if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0')
+def run_server(server_class=HTTPServer, handler_class=DashboardHandler, port=8000):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class)
+    print(f"Starting HTTP server on port {port}...")
+    httpd.serve_forever()
+
+# Main function to export data as JSON
+def export_data():
+    """Export the healthcare search data as JSON files."""
+    os.makedirs('data', exist_ok=True)
+    
+    # Export regions
+    with open('data/regions.json', 'w') as f:
+        json.dump(regions, f, indent=2)
+    
+    # Export search terms data
+    with open('data/search_terms.json', 'w') as f:
+        json.dump(search_terms_data, f, indent=2)
+    
+    # Export trend data
+    with open('data/trends.json', 'w') as f:
+        json.dump(trend_data, f, indent=2)
+    
+    print("Data exported successfully to the 'data' directory.")
+    return {
+        "regions": regions,
+        "search_terms": search_terms_data,
+        "trends": trend_data
+    }
+
+if __name__ == "__main__":
+    # Export data as JSON files
+    exported_data = export_data()
+    
+    # Start the HTTP server if requested
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--serve":
+        run_server()
+    else:
+        # Just print the data summary
+        print(f"Available regions: {', '.join(regions)}")
+        print(f"Data for {len(search_terms_data)} regions and {len(trend_data)} time periods exported.")
+        print("Run with --serve to start HTTP server.")
