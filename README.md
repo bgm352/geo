@@ -1,6 +1,6 @@
 # Healthcare Search Terms Dashboard
 
-A Python-based dashboard that visualizes the top healthcare search terms by geographical region. This interactive dashboard provides insights into healthcare trends across different parts of the world.
+A simple Python-based dashboard that visualizes the top healthcare search terms by geographical region. This dashboard provides insights into healthcare trends across different parts of the world without requiring any external Python packages.
 
 ## Features
 
@@ -8,33 +8,23 @@ A Python-based dashboard that visualizes the top healthcare search terms by geog
 - Bar chart visualization of top search terms by region
 - Pie chart showing search term distribution
 - Line chart displaying search trends over time
-- Responsive design that works on desktop and mobile devices
-
-## Technology Stack
-
-- Python 3.10+
-- Dash & Plotly for interactive visualization
-- Pandas for data manipulation
-- Tailwind CSS for styling
+- Pure Python implementation with no external dependencies
 
 ## Directory Structure
 
 ```
 healthcare-search-dashboard/
 ├── app.py                # Main application file
-├── requirements.txt      # Python dependencies
-├── Dockerfile            # For containerized deployment
-└── README.md            # Documentation
+└── README.md             # Documentation
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.10 or later
-- pip package manager
+- Python 3.6 or later (standard library only)
 
-### Installation
+### Usage
 
 1. Clone the repository:
 ```bash
@@ -42,49 +32,35 @@ git clone https://github.com/your-username/healthcare-search-dashboard.git
 cd healthcare-search-dashboard
 ```
 
-2. Create a virtual environment (optional but recommended):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+2. Run the application:
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Run the application:
+To export the data as JSON files:
 ```bash
 python app.py
 ```
 
-5. Open your browser and navigate to http://localhost:8050
-
-## Docker Deployment
-
-To run the dashboard using Docker:
-
-1. Build the Docker image:
+To start the HTTP server:
 ```bash
-docker build -t healthcare-dashboard .
+python app.py --serve
 ```
 
-2. Run the container:
-```bash
-docker run -p 8050:8050 healthcare-dashboard
-```
+3. If running the server, open your browser and navigate to http://localhost:8000
 
-3. Access the dashboard at http://localhost:8050
+## Data Structure
 
-## Data Sources
+The dashboard uses mock data stored in the following format:
 
-The current implementation uses mock data for demonstration purposes. In a production environment, you would connect to a real API endpoint to fetch healthcare search data.
+- **regions**: List of geographical regions
+- **search_terms_data**: Dictionary mapping regions to lists of search terms with their counts
+- **trend_data**: List of dictionaries containing monthly trend data for top search terms
 
-To connect to a real data source:
-1. Update the data loading logic in app.py
-2. Adjust the data processing as needed
+### Adding Real Data
 
-## Deployment on GitHub
+To integrate with real data:
+1. Modify the data structures in app.py
+2. Or implement an API integration function that pulls data from your source
+
+## GitHub Integration
 
 1. Initialize a Git repository in your project directory:
 ```bash
@@ -101,22 +77,12 @@ git add .
 git commit -m "Initial commit: Healthcare Search Dashboard"
 ```
 
-4. Create a new repository on GitHub through the web interface
-
-5. Link your local repository to GitHub:
+4. Create a new repository on GitHub and follow the instructions to push your code:
 ```bash
 git remote add origin https://github.com/your-username/healthcare-search-dashboard.git
 git branch -M main
 git push -u origin main
 ```
-
-## Future Enhancements
-
-- Add filters for date ranges
-- Implement data export functionality
-- Add more detailed geographical breakdown (countries, states, cities)
-- Include demographic information when available
-- Add user authentication for accessing sensitive data
 
 ## License
 
