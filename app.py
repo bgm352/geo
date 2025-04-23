@@ -2,8 +2,18 @@ import streamlit as st
 import pandas as pd
 import json
 import datetime
-import plotly.express as px
-import plotly.graph_objects as go
+
+# Import plotly with error handling
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+except ImportError:
+    st.error("Plotly is not installed. Installing required packages...")
+    import subprocess
+    import sys
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly"])
+    import plotly.express as px
+    import plotly.graph_objects as go
 
 # Set page configuration
 st.set_page_config(
@@ -76,7 +86,7 @@ trend_df = pd.DataFrame(trend_data)
 st.header("Healthcare Search Terms Dashboard")
 st.caption(f"Last updated: {datetime.datetime.now().strftime('%B %d, %Y')}")
 
-# Region selector using tabs
+# Region selector
 region = st.selectbox("Select Region", regions)
 
 # Create columns for layout
