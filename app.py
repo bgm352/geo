@@ -3,17 +3,22 @@ import pandas as pd
 import json
 import datetime
 
-# Import plotly with error handling
+# Try to import plotly - if not available, show error message
 try:
     import plotly.express as px
     import plotly.graph_objects as go
+    plotly_available = True
 except ImportError:
-    st.error("Plotly is not installed. Installing required packages...")
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly"])
-    import plotly.express as px
-    import plotly.graph_objects as go
+    plotly_available = False
+    st.error("""
+    **Plotly package is missing!**
+    
+    This app requires the plotly package. Please make sure it's installed in your environment 
+    by running: `pip install plotly`
+    
+    If you're using Streamlit Cloud, make sure your requirements.txt file includes plotly.
+    """)
+    st.stop()  # Stop execution if plotly is not available
 
 # Set page configuration
 st.set_page_config(
