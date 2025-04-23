@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import json
 import datetime
-import altair as alt  # Altair is included with Streamlit by default
 
 # Set page configuration
 st.set_page_config(
@@ -68,17 +66,8 @@ trend_data = [
     {"month": "Jun", "COVID vaccine": 12500, "Diabetes management": 8700, "Mental health": 7800}
 ]
 
-# Convert trend data to DataFrame for easier plotting with Altair
+# Convert trend data to DataFrame
 trend_df = pd.DataFrame(trend_data)
-
-# Transform the trend data for Altair
-trend_df_long = pd.melt(
-    trend_df, 
-    id_vars=['month'], 
-    value_vars=['COVID vaccine', 'Diabetes management', 'Mental health'],
-    var_name='category', 
-    value_name='count'
-)
 
 # Header with title and date
 st.header("Healthcare Search Terms Dashboard")
@@ -94,58 +83,22 @@ col1, col2 = st.columns(2)
 region_data = search_terms_data[region]
 region_df = pd.DataFrame(region_data)
 
-# Top search terms bar chart using native Streamlit chart
+# Top search terms using basic bar chart
 with col1:
     st.subheader(f"Top Healthcare Search Terms in {region}")
-    
-    # Create horizontal bar chart with Altair
-    bar_chart = alt.Chart(region_df).mark_bar().encode(
-        y=alt.Y('term:N', sort='-x', title=None),
-        x=alt.X('count:Q', title='Search Count'),
-        color=alt.Color('term:N', legend=None)
-    ).properties(height=400)
-    
-    st.altair_chart(bar_chart, use_container_width=True)
+    # Using Streamlit's basic bar chart
+    st.bar_chart(region_df.set_index('term'))
 
-# Distribution pie chart using native Streamlit chart
+# Distribution using standard table view
 with col2:
     st.subheader(f"Search Distribution in {region}")
-    
-    # Streamlit's native pie chart
-    st.dataframe(
-        region_df,
-        column_config={
-            "term": "Search Term",
-            "count": st.column_config.ProgressColumn(
-                "Search Distribution",
-                format="%d",
-                min_value=0,
-                max_value=region_df["count"].max()
-            ),
-        },
-        hide_index=True,
-    )
-    
-    # Simple bar chart as alternative to pie
-    chart = alt.Chart(region_df).mark_arc().encode(
-        theta=alt.Theta('count:Q'),
-        color=alt.Color('term:N')
-    ).properties(height=300)
-    
-    st.altair_chart(chart, use_container_width=True)
+    # Basic table display
+    st.table(region_df.style.highlight_max(subset=['count']))
 
-# Search trends over time using native Streamlit chart
+# Search trends over time using basic line chart
 st.subheader("Search Trends Over Time (Top 3 Terms)")
-
-# Create line chart with Altair
-line_chart = alt.Chart(trend_df_long).mark_line(point=True).encode(
-    x=alt.X('month:N', title='Month'),
-    y=alt.Y('count:Q', title='Search Count'),
-    color=alt.Color('category:N', title='Search Term'),
-    tooltip=['month', 'category', 'count']
-).properties(height=400)
-
-st.altair_chart(line_chart, use_container_width=True)
+# Using Streamlit's basic line chart
+st.line_chart(trend_df.set_index('month'))
 
 # Add footer
 st.markdown("---")
