@@ -2,23 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import datetime
-
-# Try to import plotly - if not available, show error message
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    plotly_available = True
-except ImportError:
-    plotly_available = False
-    st.error("""
-    **Plotly package is missing!**
-    
-    This app requires the plotly package. Please make sure it's installed in your environment 
-    by running: `pip install plotly`
-    
-    If you're using Streamlit Cloud, make sure your requirements.txt file includes plotly.
-    """)
-    st.stop()  # Stop execution if plotly is not available
+import altair as alt  # Altair is included with Streamlit by default
 
 # Set page configuration
 st.set_page_config(
@@ -84,8 +68,17 @@ trend_data = [
     {"month": "Jun", "COVID vaccine": 12500, "Diabetes management": 8700, "Mental health": 7800}
 ]
 
-# Convert trend data to DataFrame for easier plotting
+# Convert trend data to DataFrame for easier plotting with Altair
 trend_df = pd.DataFrame(trend_data)
+
+# Transform the trend data for Altair
+trend_df_long = pd.melt(
+    trend_df, 
+    id_vars=['month'], 
+    value_vars=['COVID vaccine', 'Diabetes management', 'Mental health'],
+    var_name='category', 
+    value_name='count'
+)
 
 # Header with title and date
 st.header("Healthcare Search Terms Dashboard")
@@ -101,70 +94,58 @@ col1, col2 = st.columns(2)
 region_data = search_terms_data[region]
 region_df = pd.DataFrame(region_data)
 
-# Top search terms bar chart
+# Top search terms bar chart using native Streamlit chart
 with col1:
     st.subheader(f"Top Healthcare Search Terms in {region}")
-    fig_bar = px.bar(
-        region_df, 
-        y="term", 
-        x="count", 
-        orientation='h',
-        color="term",
-        color_discrete_sequence=px.colors.qualitative.Set1,
-        labels={"count": "Search Count", "term": ""}
-    )
-    fig_bar.update_layout(showlegend=False, height=400)
-    st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Create horizontal bar chart with Altair
+    bar_chart = alt.Chart(region_df).mark_bar().encode(
+        y=alt.Y('term:N', sort='-x', title=None),
+        x=alt.X('count:Q', title='Search Count'),
+        color=alt.Color('term:N', legend=None)
+    ).properties(height=400)
+    
+    st.altair_chart(bar_chart, use_container_width=True)
 
-# Distribution pie chart
+# Distribution pie chart using native Streamlit chart
 with col2:
     st.subheader(f"Search Distribution in {region}")
-    fig_pie = px.pie(
-        region_df, 
-        values="count", 
-        names="term",
-        color_discrete_sequence=px.colors.qualitative.Set1
+    
+    # Streamlit's native pie chart
+    st.dataframe(
+        region_df,
+        column_config={
+            "term": "Search Term",
+            "count": st.column_config.ProgressColumn(
+                "Search Distribution",
+                format="%d",
+                min_value=0,
+                max_value=region_df["count"].max()
+            ),
+        },
+        hide_index=True,
     )
-    fig_pie.update_layout(height=400)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    
+    # Simple bar chart as alternative to pie
+    chart = alt.Chart(region_df).mark_arc().encode(
+        theta=alt.Theta('count:Q'),
+        color=alt.Color('term:N')
+    ).properties(height=300)
+    
+    st.altair_chart(chart, use_container_width=True)
 
-# Search trends over time (full width)
+# Search trends over time using native Streamlit chart
 st.subheader("Search Trends Over Time (Top 3 Terms)")
-fig_line = go.Figure()
 
-# Add each line to the figure
-fig_line.add_trace(go.Scatter(
-    x=trend_df["month"], 
-    y=trend_df["COVID vaccine"], 
-    mode='lines+markers',
-    name='COVID vaccine',
-    line=dict(color="#0088FE", width=3)
-))
+# Create line chart with Altair
+line_chart = alt.Chart(trend_df_long).mark_line(point=True).encode(
+    x=alt.X('month:N', title='Month'),
+    y=alt.Y('count:Q', title='Search Count'),
+    color=alt.Color('category:N', title='Search Term'),
+    tooltip=['month', 'category', 'count']
+).properties(height=400)
 
-fig_line.add_trace(go.Scatter(
-    x=trend_df["month"], 
-    y=trend_df["Diabetes management"], 
-    mode='lines+markers',
-    name='Diabetes management',
-    line=dict(color="#00C49F", width=3)
-))
-
-fig_line.add_trace(go.Scatter(
-    x=trend_df["month"], 
-    y=trend_df["Mental health"], 
-    mode='lines+markers',
-    name='Mental health',
-    line=dict(color="#FFBB28", width=3)
-))
-
-fig_line.update_layout(
-    height=400,
-    xaxis_title="Month",
-    yaxis_title="Search Count",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-)
-
-st.plotly_chart(fig_line, use_container_width=True)
+st.altair_chart(line_chart, use_container_width=True)
 
 # Add footer
 st.markdown("---")
