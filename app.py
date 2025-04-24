@@ -512,6 +512,7 @@ for city in [c for region in usa_regions.values() for c in region if c not in do
         # Generate potential collaborators (will be populated later)
         collaborators = []
         
+        # Create doctor record
         doctors_data[city].append({
             "name": f"Dr. {random.choice(first_names)} {random.choice(last_names)}",
             "role": role_title,
@@ -520,4 +521,566 @@ for city in [c for region in usa_regions.values() for c in region if c not in do
             "address": full_address,
             "search_count": random.randint(1000, 2700),
             "patient_rating": round(random.uniform(4.0, 5.0), 1),
-            "speaking_events": speaking_history,
+            "speaking_events": speaking_
+        "speaking_events": speaking_history,
+            "publications": random.randint(20, 100),
+            "citations": random.randint(1000, 5000),
+            "h_index": random.randint(15, 40),
+            "affiliations": affiliations,
+            "bio": f"Specializing in {specific_specialty} with a focus on patient-centered care and innovative treatments. Graduated from {affiliations[0]} and is an active member of {affiliations[1]}.",
+            "image_verified": random.choice([True, True, True, False]),  # Most have verified images
+            "research_areas": doctor_research,
+            "collaborators": collaborators,  # Will be filled later
+            "clinical_trials": clinical_trials
+        })
+
+# Add collaborators after all doctors are generated
+all_doctors = []
+for city_doctors in doctors_data.values():
+    all_doctors.extend(city_doctors)
+
+for doctor in all_doctors:
+    if not doctor["collaborators"]:  # Only fill empty collaborator lists
+        # Select 2-3 random doctors as collaborators
+        potential_collaborators = [d["name"] for d in all_doctors if d["name"] != doctor["name"]]
+        if potential_collaborators:
+            num_collaborators = min(random.randint(2, 3), len(potential_collaborators))
+            doctor["collaborators"] = random.sample(potential_collaborators, num_collaborators)
+
+# Function to get all doctors as a dataframe
+def get_doctors_df():
+    doctors_list = []
+    for city, city_doctors in doctors_data.items():
+        for doctor in city_doctors:
+            doctor_copy = doctor.copy()
+            doctor_copy["city"] = city
+            for region, cities in usa_regions.items():
+                if city in cities:
+                    doctor_copy["region"] = region
+                    break
+            doctors_list.append(doctor_copy)
+    
+    return pd.DataFrame(doctors_list)
+
+# Processing functions
+def extract_specialty_category(role):
+    """Extract specialty from role title"""
+    if "of" in role:
+        return role.split("of")[1].strip()
+    return role
+
+def count_doctors_by_region(df):
+    """Count doctors by region"""
+    return df.groupby("region").size().reset_index(name="count")
+
+def count_doctors_by_specialty(df):
+    """Count doctors by specialty category"""
+    df["specialty_category"] = df["role"].apply(extract_specialty_category)
+    return df.groupby("specialty_category").size().reset_index(name="count")
+
+def count_doctors_by_hospital(df):
+    """Count doctors by hospital"""
+    return df.groupby("hospital").size().reset_index(name="count").sort_values("count", ascending=False).head(10)
+
+def get_top_doctors(df, n=10):
+    """Get top N doctors by search count"""
+    return df.sort_values("search_count", ascending=False).head(n)
+
+def get_region_for_city(city):
+    """Find region for a city"""
+    for region, cities in usa_regions.items():
+        if city in cities:
+            return region
+    return "Unknown"
+
+def create_doctor_network(df, min_connections=2):
+    """Create network graph of doctor collaborations"""
+    G = nx.Graph()
+    
+    # Add nodes
+    for _, doctor in df.iterrows():
+        G.add_node(doctor["name"], 
+                  specialty=doctor["specialty"],
+                  hospital=doctor["hospital"],
+                  city=doctor["city"],
+                  citations=doctor["citations"])
+    
+    # Add edges based on collaborations
+    for _, doctor in df.iterrows():
+        for collaborator in doctor["collaborators"]:
+            if G.has_node(doctor["name"]) and G.has_node(collaborator):
+                G.add_edge(doctor["name"], collaborator)
+    
+    # Filter to keep only nodes with minimum connections
+    nodes_to_keep = [node for node, degree in dict(G.degree()).items() if degree >= min_connections]
+    return G.subgraph(nodes_to_keep)
+
+# Layout functions
+def create_sidebar():
+    st.sidebar.title("Filters")
+    
+    df = get_doctors_df()
+    
+    # Region filter
+    all_regions = list(usa_regions.keys())
+    selected_regions = st.sidebar.multiselect("Regions", all_regions, default=all_regions)
+    
+    # City filter based on selected regions
+    available_cities = [city for region in selected_regions for city in usa_regions[region]]
+    selected_cities = st.sidebar.multiselect("Cities", available_cities, default=available_cities[:5])
+    
+    # Specialty filter
+    specialties = df["specialty"].unique().tolist()
+    selected_specialties = st.sidebar.multiselect("Specialties", specialties, default=specialties[:5])
+    
+    # Rating filter
+    min_rating = st.sidebar.slider("Minimum Rating", 4.0, 5.0, 4.0, 0.1)
+    
+    # Publications filter
+    min_publications = st.sidebar.slider("Minimum Publications", 0, 100, 20)
+    
+    # Apply filters
+    filtered_df = df.copy()
+    
+    if selected_regions:
+        filtered_df = filtered_df[filtered_df["region"].isin(selected_regions)]
+    
+    if selected_cities:
+        filtered_df = filtered_df[filtered_df["city"].isin(selected_cities)]
+    
+    if selected_specialties:
+        filtered_df = filtered_df[filtered_df["specialty"].isin(selected_specialties)]
+    
+    filtered_df = filtered_df[filtered_df["patient_rating"] >= min_rating]
+    filtered_df = filtered_df[filtered_df["publications"] >= min_publications]
+    
+    return filtered_df
+
+def show_dashboard(df):
+    st.title("USA Physicians Directory")
+    
+    # KPI metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Physicians", len(df))
+    
+    with col2:
+        avg_rating = round(df["patient_rating"].mean(), 2)
+        st.metric("Average Rating", avg_rating)
+    
+    with col3:
+        avg_publications = round(df["publications"].mean(), 1)
+        st.metric("Avg Publications", avg_publications)
+    
+    with col4:
+        top_region = df.groupby("region").size().idxmax()
+        st.metric("Most Active Region", top_region)
+    
+    # Geographic Distribution
+    st.header("Geographic Distribution")
+    region_counts = count_doctors_by_region(df)
+    
+    fig = px.bar(region_counts, x="region", y="count", 
+                title="Physicians by Region",
+                color="region")
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Specialty Distribution
+    st.header("Specialty Distribution")
+    specialty_counts = count_doctors_by_specialty(df)
+    
+    fig = px.pie(specialty_counts, values="count", names="specialty_category", 
+                title="Physicians by Specialty",
+                hole=0.4)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Top Hospitals
+    st.header("Top Hospitals")
+    hospital_counts = count_doctors_by_hospital(df)
+    
+    fig = px.bar(hospital_counts, x="hospital", y="count", 
+                title="Top Hospitals by Number of Physicians",
+                color="count")
+    fig.update_layout(xaxis={'categoryorder':'total descending'})
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Top Physicians
+    st.header("Top Physicians by Search Count")
+    top_doctors = get_top_doctors(df)
+    
+    fig = px.bar(top_doctors, x="name", y="search_count", 
+                title="Most Searched Physicians",
+                color="specialty",
+                hover_data=["hospital", "patient_rating", "publications"])
+    fig.update_layout(xaxis={'categoryorder':'total descending'})
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Physician Network Analysis
+    st.header("Physician Collaboration Network")
+    network_df = df.copy()
+    
+    if len(network_df) > 0:
+        G = create_doctor_network(network_df)
+        
+        if len(G.nodes()) > 0:
+            # Convert NetworkX graph to Plotly figure
+            pos = nx.spring_layout(G, seed=42)
+            
+            edge_x = []
+            edge_y = []
+            for edge in G.edges():
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                edge_x.extend([x0, x1, None])
+                edge_y.extend([y0, y1, None])
+            
+            node_x = []
+            node_y = []
+            node_text = []
+            node_size = []
+            node_color = []
+            
+            specialty_colors = {}
+            color_idx = 0
+            
+            for node in G.nodes():
+                x, y = pos[node]
+                node_x.append(x)
+                node_y.append(y)
+                
+                specialty = G.nodes[node]['specialty']
+                hospital = G.nodes[node]['hospital']
+                city = G.nodes[node]['city']
+                citations = G.nodes[node]['citations']
+                
+                node_text.append(f"Name: {node}<br>Specialty: {specialty}<br>Hospital: {hospital}<br>City: {city}<br>Citations: {citations}")
+                
+                # Node size based on citations
+                node_size.append(min(citations/100, 20))
+                
+                # Node color based on specialty
+                if specialty not in specialty_colors:
+                    specialty_colors[specialty] = color_idx
+                    color_idx += 1
+                node_color.append(specialty_colors[specialty])
+            
+            # Create edge trace
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y,
+                line=dict(width=0.5, color='#888'),
+                hoverinfo='none',
+                mode='lines')
+            
+            # Create node trace
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers',
+                hoverinfo='text',
+                text=node_text,
+                marker=dict(
+                    showscale=True,
+                    colorscale='Viridis',
+                    size=node_size,
+                    color=node_color,
+                    line_width=2))
+            
+            # Create network figure
+            fig = go.Figure(data=[edge_trace, node_trace],
+                         layout=go.Layout(
+                            title='Physician Collaboration Network',
+                            titlefont_size=16,
+                            showlegend=False,
+                            hovermode='closest',
+                            margin=dict(b=20,l=5,r=5,t=40),
+                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                        )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.caption("Node size represents citation count, color represents different specialties")
+        else:
+            st.write("Not enough connected physicians to create network visualization.")
+    else:
+        st.write("No physicians data available for network visualization.")
+
+def show_physician_directory(df):
+    st.header("Physician Directory")
+    
+    # Search
+    search_term = st.text_input("Search physicians by name, specialty, or hospital")
+    
+    if search_term:
+        search_term = search_term.lower()
+        search_results = df[
+            df["name"].str.lower().str.contains(search_term) | 
+            df["specialty"].str.lower().str.contains(search_term) | 
+            df["hospital"].str.lower().str.contains(search_term)
+        ]
+        display_df = search_results
+    else:
+        display_df = df
+    
+    # Sort options
+    sort_option = st.selectbox(
+        "Sort by",
+        ["Search Count (High to Low)", "Rating (High to Low)", "Publications (High to Low)", "Name (A-Z)"]
+    )
+    
+    if sort_option == "Search Count (High to Low)":
+        display_df = display_df.sort_values("search_count", ascending=False)
+    elif sort_option == "Rating (High to Low)":
+        display_df = display_df.sort_values("patient_rating", ascending=False)
+    elif sort_option == "Publications (High to Low)":
+        display_df = display_df.sort_values("publications", ascending=False)
+    else:  # Name (A-Z)
+        display_df = display_df.sort_values("name")
+    
+    # Display results with pagination
+    items_per_page = 5
+    total_pages = max(1, len(display_df) // items_per_page + (1 if len(display_df) % items_per_page > 0 else 0))
+    
+    col1, col2 = st.columns([8, 2])
+    with col2:
+        page = st.number_input("Page", min_value=1, max_value=total_pages, value=1)
+    
+    with col1:
+        st.write(f"Showing {min((page-1)*items_per_page+1, len(display_df))} to {min(page*items_per_page, len(display_df))} of {len(display_df)} physicians")
+    
+    start_idx = (page - 1) * items_per_page
+    end_idx = min(start_idx + items_per_page, len(display_df))
+    
+    for i in range(start_idx, end_idx):
+        doctor = display_df.iloc[i]
+        
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            # Profile image placeholder
+            if doctor["image_verified"]:
+                st.image("https://placehold.co/150x150.png", caption="Verified Profile")
+            else:
+                st.image("https://placehold.co/150x150/CCCCCC/FFFFFF.png", caption="No Image")
+        
+        with col2:
+            st.subheader(doctor["name"])
+            st.write(f"**Role:** {doctor['role']}")
+            st.write(f"**Specialty:** {doctor['specialty']}")
+            st.write(f"**Hospital:** {doctor['hospital']}")
+            st.write(f"**Location:** {doctor['city']}")
+            
+            col2a, col2b, col2c = st.columns(3)
+            with col2a:
+                st.write(f"⭐ **Rating:** {doctor['patient_rating']}/5.0")
+            with col2b:
+                st.write(f"📊 **Publications:** {doctor['publications']}")
+            with col2c:
+                st.write(f"🔍 **Searches:** {doctor['search_count']}")
+            
+            with st.expander("See Details"):
+                st.write(f"**Biography:** {doctor['bio']}")
+                st.write(f"**Address:** {doctor['address']}")
+                
+                st.write("**Research Areas:**")
+                for area in doctor["research_areas"]:
+                    st.write(f"- {area}")
+                
+                st.write("**Speaking Events:**")
+                for event in doctor["speaking_events"]:
+                    st.write(f"- {event}")
+                
+                st.write("**Collaborators:**")
+                for collaborator in doctor["collaborators"]:
+                    st.write(f"- {collaborator}")
+                
+                st.write("**Clinical Trials:**")
+                for trial in doctor["clinical_trials"]:
+                    st.write(f"- {trial}")
+                
+                st.write(f"**H-Index:** {doctor['h_index']}")
+                st.write(f"**Total Citations:** {doctor['citations']}")
+                
+                st.write("**Academic Affiliations:**")
+                for affiliation in doctor["affiliations"]:
+                    st.write(f"- {affiliation}")
+        
+        st.markdown("---")
+
+def show_analytics(df):
+    st.header("Analytics Dashboard")
+    
+    # Ratings Distribution
+    st.subheader("Physician Ratings Distribution")
+    
+    fig = px.histogram(df, x="patient_rating", nbins=10, 
+                      title="Distribution of Physician Ratings",
+                      color_discrete_sequence=['#3366CC'])
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Research Impact
+    st.subheader("Research Impact Analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig = px.scatter(df, x="publications", y="citations",
+                        color="specialty", size="h_index",
+                        hover_data=["name", "hospital", "city"],
+                        title="Research Impact: Publications vs Citations")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Aggregate research metrics by specialty
+        specialty_metrics = df.groupby("specialty").agg({
+            "publications": "mean",
+            "citations": "mean",
+            "h_index": "mean"
+        }).reset_index()
+        
+        specialty_metrics["publications"] = specialty_metrics["publications"].round(1)
+        specialty_metrics["citations"] = specialty_metrics["citations"].round(1)
+        specialty_metrics["h_index"] = specialty_metrics["h_index"].round(1)
+        
+        fig = px.bar(specialty_metrics.sort_values("h_index", ascending=False).head(10), 
+                    x="specialty", y="h_index",
+                    title="Average H-Index by Top 10 Specialties",
+                    color="h_index")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Correlation Heatmap
+    st.subheader("Correlation Analysis")
+    
+    numeric_cols = ["search_count", "patient_rating", "publications", "citations", "h_index"]
+    corr_matrix = df[numeric_cols].corr()
+    
+    fig = px.imshow(corr_matrix, 
+                   labels=dict(x="Metric", y="Metric", color="Correlation"),
+                   x=corr_matrix.columns,
+                   y=corr_matrix.columns,
+                   color_continuous_scale="RdBu_r")
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Regional Comparison
+    st.subheader("Regional Comparison")
+    
+    region_metrics = df.groupby("region").agg({
+        "patient_rating": "mean",
+        "publications": "mean",
+        "citations": "mean",
+        "h_index": "mean",
+        "search_count": "mean"
+    }).reset_index()
+    
+    # Round values for display
+    for col in region_metrics.columns:
+        if col != "region":
+            region_metrics[col] = region_metrics[col].round(2)
+    
+    # Multi-metric comparison radar chart
+    categories = ["Patient Rating", "Publications", "Citations", "H-Index", "Search Count"]
+    
+    fig = go.Figure()
+    
+    for i, region in enumerate(region_metrics["region"]):
+        values = [
+            region_metrics.loc[i, "patient_rating"] / region_metrics["patient_rating"].max(),
+            region_metrics.loc[i, "publications"] / region_metrics["publications"].max(),
+            region_metrics.loc[i, "citations"] / region_metrics["citations"].max(),
+            region_metrics.loc[i, "h_index"] / region_metrics["h_index"].max(),
+            region_metrics.loc[i, "search_count"] / region_metrics["search_count"].max()
+        ]
+        
+        fig.add_trace(go.Scatterpolar(
+            r=values,
+            theta=categories,
+            fill='toself',
+            name=region
+        ))
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            )),
+        showlegend=True,
+        title="Regional Performance Comparison (Normalized)"
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Hospital Rankings
+    st.subheader("Top Hospitals Analysis")
+    
+    # Get top hospitals with at least 3 physicians
+    hospital_counts = df.groupby("hospital").size()
+    top_hospitals = hospital_counts[hospital_counts >= 3].index.tolist()
+    
+    if top_hospitals:
+        top_hospital_df = df[df["hospital"].isin(top_hospitals)]
+        
+        hospital_metrics = top_hospital_df.groupby("hospital").agg({
+            "patient_rating": "mean",
+            "publications": "mean",
+            "citations": "mean",
+            "h_index": "mean"
+        }).reset_index()
+        
+        for col in hospital_metrics.columns:
+            if col != "hospital":
+                hospital_metrics[col] = hospital_metrics[col].round(2)
+        
+        metric_option = st.selectbox(
+            "Select metric for hospital comparison",
+            ["Average Rating", "Average Publications", "Average Citations", "Average H-Index"]
+        )
+        
+        if metric_option == "Average Rating":
+            col_name = "patient_rating"
+            title = "Top Hospitals by Average Physician Rating"
+        elif metric_option == "Average Publications":
+            col_name = "publications"
+            title = "Top Hospitals by Average Physician Publications"
+        elif metric_option == "Average Citations":
+            col_name = "citations"
+            title = "Top Hospitals by Average Physician Citations" 
+        else:
+            col_name = "h_index"
+            title = "Top Hospitals by Average Physician H-Index"
+        
+        # Create sorted bar chart
+        fig = px.bar(
+            hospital_metrics.sort_values(col_name, ascending=False).head(10),
+            x="hospital",
+            y=col_name,
+            title=title,
+            color=col_name,
+            text_auto='.2f'
+        )
+        fig.update_layout(xaxis={'categoryorder':'total descending'})
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.write("Not enough data for meaningful hospital comparisons.")
+
+# Main app
+def main():
+    # Create tabs
+    tab1, tab2, tab3 = st.tabs(["Dashboard", "Physician Directory", "Analytics"])
+    
+    # Filter data
+    filtered_df = create_sidebar()
+    
+    # Populate tabs
+    with tab1:
+        show_dashboard(filtered_df)
+    
+    with tab2:
+        show_physician_directory(filtered_df)
+    
+    with tab3:
+        show_analytics(filtered_df)
+
+if __name__ == "__main__":
+    main()
