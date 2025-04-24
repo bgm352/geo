@@ -521,7 +521,3 @@ for city in [c for region in usa_regions.values() for c in region if c not in do
             "search_count": random.randint(1000, 2700),
             "patient_rating": round(random.uniform(4.0, 5.0), 1),
             "speaking_events": speaking_history,
-            "publications": random.randint(20, 100),
-            "citations": random.randint(500, 5000),
-            "h_index": random.randint(10, 40),
-            "affiliations": affiliations
